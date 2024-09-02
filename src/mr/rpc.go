@@ -9,21 +9,33 @@ package mr
 import "os"
 import "strconv"
 
-//
-// example to show how to declare the arguments
-// and reply for an RPC.
-//
+type AssignTaskArgs struct{}
 
-type ExampleArgs struct {
-	X int
+type AssignTaskReply struct {
+	NReduce  int
+	TaskType int
+	Index    int
+	Filename []string
 }
 
-type ExampleReply struct {
-	Y int
+type MapCompleteArgs struct {
+	Index    int
+	Filename []string
 }
 
-// Add your RPC definitions here.
+type MapCompleteReply struct{}
 
+type ReduceCompleteArgs struct {
+	Index int
+}
+
+type ReduceCompleteReply struct{}
+
+const (
+	MapTask = iota
+	ReduceTask
+	CompleteTask
+)
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.
@@ -34,3 +46,4 @@ func coordinatorSock() string {
 	s += strconv.Itoa(os.Getuid())
 	return s
 }
+
