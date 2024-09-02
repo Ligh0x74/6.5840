@@ -173,13 +173,7 @@ func (c *Coordinator) Done() bool {
 
 	c.reduceTaskStateMutex.Lock()
 	defer c.reduceTaskStateMutex.Unlock()
-	for i := range c.reduceTaskState {
-		if c.reduceTaskState[i] != completed {
-			return false
-		}
-	}
-
-	return true
+	return c.reduceTaskComplete
 }
 
 // create a Coordinator.

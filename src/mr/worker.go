@@ -124,7 +124,7 @@ func Worker(mapf func(string, string) []KeyValue,
 		os.Rename(ofile.Name(), "./"+oname)
 		ofile.Close()
 
-		// send filenames to coordinator
+		// send complete msg to coordinator
 		args, reply := ReduceCompleteArgs{}, ReduceCompleteReply{}
 		args.Index = r.Index
 		call("Coordinator.ReduceComplete", &args, &reply)
