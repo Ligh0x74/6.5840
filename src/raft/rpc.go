@@ -1,6 +1,9 @@
 package raft
 
-import "time"
+import (
+	"sort"
+	"time"
+)
 
 type AppendEntriesArgs struct {
 	Term         int
@@ -14,6 +17,10 @@ type AppendEntriesArgs struct {
 type AppendEntriesReply struct {
 	Term    int
 	Success bool
+
+	XTerm  int
+	XIndex int
+	XLen   int
 }
 
 type RequestVoteArgs struct {
@@ -49,6 +56,18 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if len(args.Entries) != 0 {
 		DPrintf(dLog, "S%d -> S%d AppendEntries, Log Before Append %v -> %v, PrevI%d PrevT%d", args.LeaderId, rf.me, args.Entries, rf.log, args.PrevLogIndex, args.PrevLogTerm)
 	}
+
+	reply.XTerm, reply.XIndex, reply.XLen = null, null, null
+	if rf.currentTerm <= args.Term && len(rf.log)-1 < args.PrevLogIndex {
+		reply.XLen = len(rf.log)
+	}
+	if rf.currentTerm <= args.Term && len(rf.log)-1 >= args.PrevLogIndex && rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
+		reply.XTerm = rf.log[args.PrevLogIndex].Term
+		reply.XIndex = sort.Search(args.PrevLogIndex+1, func(i int) bool {
+			return rf.log[i].Term >= reply.XTerm
+		})
+	}
+
 	if ok {
 		reply.Success = false
 	} else {

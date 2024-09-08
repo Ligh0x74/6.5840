@@ -92,7 +92,19 @@ func (rf *Raft) appendEntriesWrapper(i int, args AppendEntriesArgs) {
 		}
 	} else {
 		DPrintf(dLeader, "S%d <- S%d AppendEntries, Log %v, Reply False, T%d <- T%d", rf.me, i, args.Entries, rf.currentTerm, reply.Term)
-		rf.nextIndex[i]--
+		if reply.XTerm != null {
+			if rf.log[reply.XIndex].Term != reply.XTerm {
+				rf.nextIndex[i] = reply.XIndex
+			} else {
+				j := reply.XIndex
+				for ; j+1 < len(rf.log) && rf.log[j+1].Term == reply.XTerm; j++ {
+				}
+				rf.nextIndex[i] = j
+			}
+		} else {
+			rf.nextIndex[i] = reply.XLen
+		}
+
 		args.LeaderCommit = rf.commitIndex
 		if len(rf.log)-1 >= rf.nextIndex[i] {
 			args.Entries = make([]LogEntry, len(rf.log[rf.nextIndex[i]:]))
