@@ -62,7 +62,6 @@ func (rf *Raft) appendEntriesWrapper(i int, args AppendEntriesArgs) {
 	}
 	if len(args.Entries) == 0 {
 		DPrintf(dLeader, "S%d <- S%d AppendEntries, HeartBeat, T%d <- T%d", rf.me, i, rf.currentTerm, reply.Term)
-		return
 	}
 
 	ok = rf.currentTerm != args.Term
