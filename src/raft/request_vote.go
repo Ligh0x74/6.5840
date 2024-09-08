@@ -16,6 +16,7 @@ func (rf *Raft) ticker() {
 			rf.role = candidate
 			rf.currentTerm++
 			rf.votedFor = rf.me
+			rf.persist()
 			rf.voteCnt = 1
 			DPrintf(dVote, "S%d Start Leader Election, T%d", rf.me, rf.currentTerm)
 			args := RequestVoteArgs{
@@ -41,18 +42,17 @@ func (rf *Raft) requestVoteWrapper(i int, args RequestVoteArgs) {
 	rf.mu.Unlock()
 
 	ok := false
-	for !ok {
-		DPrintf(dVote, "S%d -> S%d RequestVote, T%d", args.CandidateId, i, args.Term)
-		ok = rf.sendRequestVote(i, &args, &reply)
-		if rf.killed() {
-			return
-		}
+	DPrintf(dVote, "S%d -> S%d RequestVote, T%d", args.CandidateId, i, args.Term)
+	ok = rf.sendRequestVote(i, &args, &reply)
+	if !ok {
+		return
 	}
 
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	if rf.currentTerm < reply.Term {
 		rf.currentTerm = reply.Term
+		rf.persist()
 		rf.role = follower
 	}
 

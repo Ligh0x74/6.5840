@@ -13,16 +13,20 @@ func (rf *Raft) heartbeat() {
 			rf.mu.Unlock()
 			return
 		}
-		DPrintf(dLeader, "S%d Start Heartbeat, T%d", rf.me, rf.currentTerm)
+		DPrintf(dLeader, "S%d Start Heartbeat, T%d, MatchI%v", rf.me, rf.currentTerm, rf.matchIndex)
 		args := AppendEntriesArgs{
 			Term:         rf.currentTerm,
 			LeaderId:     rf.me,
-			Entries:      []LogEntry{},
 			LeaderCommit: rf.commitIndex,
 		}
 		for i := range rf.peers {
 			if i == rf.me {
 				continue
+			}
+			if len(rf.log)-1 < rf.nextIndex[i] {
+				args.Entries = []LogEntry{}
+			} else {
+				args.Entries = []LogEntry{rf.log[rf.nextIndex[i]]}
 			}
 			args.PrevLogIndex = rf.nextIndex[i] - 1
 			args.PrevLogTerm = rf.log[rf.nextIndex[i]-1].Term
@@ -39,22 +43,21 @@ func (rf *Raft) appendEntriesWrapper(i int, args AppendEntriesArgs) {
 	reply := AppendEntriesReply{}
 
 	ok := false
-	for !ok {
-		if len(args.Entries) == 0 {
-			DPrintf(dLeader, "S%d -> S%d AppendEntries, HeartBeat, T%d", args.LeaderId, i, args.Term)
-		} else {
-			DPrintf(dLeader, "S%d -> S%d AppendEntries, Log %v, T%d", args.LeaderId, i, args.Entries, args.Term)
-		}
-		ok = rf.sendAppendEntries(i, &args, &reply)
-		if rf.killed() {
-			return
-		}
+	if len(args.Entries) == 0 {
+		DPrintf(dLeader, "S%d -> S%d AppendEntries, HeartBeat, T%d", args.LeaderId, i, args.Term)
+	} else {
+		DPrintf(dLeader, "S%d -> S%d AppendEntries, Log, T%d, NextI%d", args.LeaderId, i, args.Term, args.PrevLogIndex+1)
+	}
+	ok = rf.sendAppendEntries(i, &args, &reply)
+	if !ok {
+		return
 	}
 
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	if rf.currentTerm < reply.Term {
 		rf.currentTerm = reply.Term
+		rf.persist()
 		rf.role = follower
 	}
 	if len(args.Entries) == 0 {
@@ -64,12 +67,12 @@ func (rf *Raft) appendEntriesWrapper(i int, args AppendEntriesArgs) {
 
 	ok = rf.currentTerm != args.Term
 	if ok {
-		DPrintf(dLeader, "S%d <- S%d AppendEntries, Log %v, Assume False, T%d = T%d, PrevI%d = PrevI%d", rf.me, i, args.Entries, rf.currentTerm, args.Term, rf.nextIndex[i]-1, args.PrevLogIndex)
+		DPrintf(dLeader, "S%d <- S%d AppendEntries, Log, Assume False, T%d = T%d, PrevI%d = PrevI%d", rf.me, i, rf.currentTerm, args.Term, rf.nextIndex[i]-1, args.PrevLogIndex)
 		return
 	}
 
 	if reply.Success {
-		DPrintf(dLeader, "S%d <- S%d AppendEntries, Log %v, Reply True, T%d <- T%d", rf.me, i, args.Entries, rf.currentTerm, reply.Term)
+		DPrintf(dLeader, "S%d <- S%d AppendEntries, Log, Reply True, T%d <- T%d, NextI%d", rf.me, i, rf.currentTerm, reply.Term, rf.nextIndex[i])
 		curNextIndex := args.PrevLogIndex + 1 + len(args.Entries)
 		if rf.nextIndex[i] >= curNextIndex {
 			return
@@ -91,7 +94,7 @@ func (rf *Raft) appendEntriesWrapper(i int, args AppendEntriesArgs) {
 			DPrintf(dCommit, "S%d Advance CommitIndex, C%d", rf.me, rf.commitIndex)
 		}
 	} else {
-		DPrintf(dLeader, "S%d <- S%d AppendEntries, Log %v, Reply False, T%d <- T%d", rf.me, i, args.Entries, rf.currentTerm, reply.Term)
+		DPrintf(dLeader, "S%d <- S%d AppendEntries, Log, Reply False, T%d <- T%d, NextI%d", rf.me, i, rf.currentTerm, reply.Term, rf.nextIndex[i])
 		if reply.XTerm != null {
 			if rf.log[reply.XIndex].Term != reply.XTerm {
 				rf.nextIndex[i] = reply.XIndex
@@ -127,8 +130,9 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 			Command: command,
 			Term:    term,
 		}
-		DPrintf(dLeader, "S%d Start Log %v -> %v, T%d", rf.me, log, rf.log, rf.currentTerm)
+		DPrintf(dLeader, "S%d Start Log %v -> I%d, T%d", rf.me, log, len(rf.log), rf.currentTerm)
 		rf.log = append(rf.log, log)
+		rf.persist()
 		rf.matchIndex[rf.me] = len(rf.log) - 1
 
 		args := AppendEntriesArgs{

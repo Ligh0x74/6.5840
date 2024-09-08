@@ -53,9 +53,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	ok = ok || (len(rf.log)-1 < args.PrevLogIndex)
 	ok = ok || (rf.log[args.PrevLogIndex].Term != args.PrevLogTerm)
 
-	if len(args.Entries) != 0 {
-		DPrintf(dLog, "S%d -> S%d AppendEntries, Log Before Append %v -> %v, PrevI%d PrevT%d", args.LeaderId, rf.me, args.Entries, rf.log, args.PrevLogIndex, args.PrevLogTerm)
-	}
+	//if len(args.Entries) != 0 {
+	//	DPrintf(dLog, "S%d -> S%d AppendEntries, Log Before Append %v -> %v, PrevI%d PrevT%d", args.LeaderId, rf.me, args.Entries, rf.log, args.PrevLogIndex, args.PrevLogTerm)
+	//}
 
 	reply.XTerm, reply.XIndex, reply.XLen = null, null, null
 	if rf.currentTerm <= args.Term && len(rf.log)-1 < args.PrevLogIndex {
@@ -89,9 +89,10 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			rf.cond.Broadcast()
 		}
 	}
-	if len(args.Entries) != 0 {
-		DPrintf(dLog, "S%d -> S%d AppendEntries, Log After Append %v -> %v, PrevI%d PrevT%d", args.LeaderId, rf.me, args.Entries, rf.log, args.PrevLogIndex, args.PrevLogTerm)
-	}
+
+	//if len(args.Entries) != 0 {
+	//	DPrintf(dLog, "S%d -> S%d AppendEntries, Log After Append %v -> %v, PrevI%d PrevT%d", args.LeaderId, rf.me, args.Entries, rf.log, args.PrevLogIndex, args.PrevLogTerm)
+	//}
 
 	if rf.currentTerm < args.Term {
 		rf.currentTerm = args.Term
@@ -101,6 +102,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.role = follower
 	}
 	reply.Term = rf.currentTerm
+	rf.persist()
 }
 
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
@@ -126,5 +128,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.role = follower
 	}
 	reply.Term = rf.currentTerm
+	rf.persist()
 }
 
