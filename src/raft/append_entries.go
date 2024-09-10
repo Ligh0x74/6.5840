@@ -107,8 +107,9 @@ func (rf *Raft) appendEntriesWrapper(i int, args AppendEntriesArgs) {
 		}
 	} else {
 		DPrintf(dLeader, "S%d <- S%d AppendEntries, Reply False, T%d <- T%d, NextI%d", rf.me, i, rf.currentTerm, reply.Term, rf.nextIndex[i])
+
 		if reply.XTerm != null {
-			if rf.getLogEntry(reply.XIndex).Term != reply.XTerm {
+			if reply.XIndex < rf.logOffset || rf.getLogEntry(reply.XIndex).Term != reply.XTerm {
 				rf.nextIndex[i] = reply.XIndex
 			} else {
 				j := reply.XIndex
