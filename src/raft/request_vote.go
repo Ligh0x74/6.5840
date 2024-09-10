@@ -22,8 +22,8 @@ func (rf *Raft) ticker() {
 			args := RequestVoteArgs{
 				Term:         rf.currentTerm,
 				CandidateId:  rf.me,
-				LastLogIndex: len(rf.log) - 1,
-				LastLogTerm:  rf.log[len(rf.log)-1].Term,
+				LastLogIndex: rf.getLogLen() - 1,
+				LastLogTerm:  rf.getLogEntry(rf.getLogLen() - 1).Term,
 			}
 			for i := range rf.peers {
 				if i == rf.me {
@@ -57,8 +57,8 @@ func (rf *Raft) requestVoteWrapper(i int, args RequestVoteArgs) {
 	}
 
 	ok = rf.currentTerm != args.Term
-	ok = ok || (len(rf.log)-1 != args.LastLogIndex)
-	ok = ok || (rf.log[len(rf.log)-1].Term != args.LastLogTerm)
+	ok = ok || (rf.getLogLen()-1 != args.LastLogIndex)
+	ok = ok || (rf.getLogEntry(rf.getLogLen()-1).Term != args.LastLogTerm)
 	if ok {
 		DPrintf(dVote, "S%d <- S%d RequestVote, Assume False, T%d <- T%d", rf.me, i, rf.currentTerm, reply.Term)
 		return
@@ -69,7 +69,7 @@ func (rf *Raft) requestVoteWrapper(i int, args RequestVoteArgs) {
 		if rf.voteCnt++; rf.voteCnt == len(rf.peers)/2+1 {
 			rf.role = leader
 			for i := range rf.peers {
-				rf.nextIndex[i] = len(rf.log)
+				rf.nextIndex[i] = rf.getLogLen()
 				rf.matchIndex[i] = 0
 			}
 			go rf.heartbeat()

@@ -100,7 +100,37 @@ type Raft struct {
 	role                  int
 	lastValidRPCTimestamp time.Time
 	voteCnt               int
+	applyCh               chan ApplyMsg
+	applyIndex            int
 	cond                  *sync.Cond
+
+	snapshot  []byte
+	logOffset int
+}
+
+// must hold lock before call
+func (rf *Raft) getLogLen() int {
+	return len(rf.log) + rf.logOffset
+}
+
+// must hold lock before call
+func (rf *Raft) getLogEntry(i int) LogEntry {
+	i -= rf.logOffset
+	return rf.log[i]
+}
+
+// must hold lock before call
+func (rf *Raft) getLogSuffixCopy(i int) []LogEntry {
+	i -= rf.logOffset
+	entries := make([]LogEntry, len(rf.log)-i)
+	copy(entries, rf.log[i:])
+	return entries
+}
+
+// must hold lock before call
+func (rf *Raft) getLogPrefix(i int) []LogEntry {
+	i -= rf.logOffset
+	return rf.log[:i]
 }
 
 // return currentTerm and whether this server
@@ -125,8 +155,9 @@ func (rf *Raft) persist() {
 	e.Encode(rf.currentTerm)
 	e.Encode(rf.votedFor)
 	e.Encode(rf.log)
+	e.Encode(rf.logOffset)
 	raftstate := w.Bytes()
-	rf.persister.Save(raftstate, nil)
+	rf.persister.Save(raftstate, rf.snapshot)
 }
 
 // restore previously persisted state.
@@ -138,9 +169,11 @@ func (rf *Raft) readPersist(data []byte) {
 	d := labgob.NewDecoder(r)
 	if d.Decode(&rf.currentTerm) != nil ||
 		d.Decode(&rf.votedFor) != nil ||
-		d.Decode(&rf.log) != nil {
+		d.Decode(&rf.log) != nil ||
+		d.Decode(&rf.logOffset) != nil {
 		log.Fatalf("S%d readPersist error", rf.me)
 	}
+	rf.snapshot = rf.persister.ReadSnapshot()
 }
 
 // the service says it has created a snapshot that has
@@ -148,8 +181,13 @@ func (rf *Raft) readPersist(data []byte) {
 // service no longer needs the log through (and including)
 // that index. Raft should now trim its log as much as possible.
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
-	// Your code here (3D).
-
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	rf.log = rf.getLogSuffixCopy(index)
+	rf.logOffset = index
+	rf.snapshot = make([]byte, len(snapshot))
+	copy(rf.snapshot, snapshot)
+	DPrintf(dSnap, "S%d Snapshot, Log Offset %d", rf.me, rf.logOffset)
 }
 
 // the tester doesn't halt goroutines created by Raft after each test,
@@ -199,38 +237,43 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.log = make([]LogEntry, 1)
 	rf.nextIndex = make([]int, len(peers))
 	rf.matchIndex = make([]int, len(peers))
+	rf.applyCh = applyCh
 	rf.cond = sync.NewCond(&rf.mu)
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
+	DPrintf(dInfo, "S%d Make, I%d", rf.me, rf.logOffset)
+
+	rf.applyIndex = rf.logOffset
+	go rf.apply()
 
 	// start ticker goroutine to start elections
 	go rf.ticker()
 
-	go rf.apply(applyCh)
 	return rf
 }
 
-func (rf *Raft) apply(applyCh chan ApplyMsg) {
-	applyIndex := 0
+func (rf *Raft) apply() {
 	for !rf.killed() {
 		rf.cond.L.Lock()
-		for applyIndex == rf.commitIndex {
+		for rf.applyIndex == rf.commitIndex {
 			rf.cond.Wait()
 		}
-		for applyIndex+1 <= rf.commitIndex {
-			applyIndex++
-			DPrintf(dCommit, "S%d Apply CommitIndex, C%d", rf.me, applyIndex)
+		for rf.applyIndex+1 <= rf.commitIndex {
+			rf.applyIndex++
+			DPrintf(dCommit, "S%d Apply CommitIndex, C%d", rf.me, rf.applyIndex)
 			msg := ApplyMsg{
 				CommandValid:  true,
-				Command:       rf.log[applyIndex].Command,
-				CommandIndex:  applyIndex,
+				Command:       rf.getLogEntry(rf.applyIndex).Command,
+				CommandIndex:  rf.applyIndex,
 				SnapshotValid: false,
 				Snapshot:      nil,
 				SnapshotTerm:  0,
 				SnapshotIndex: 0,
 			}
-			applyCh <- msg
+			rf.cond.L.Unlock()
+			rf.applyCh <- msg
+			rf.cond.L.Lock()
 		}
 		rf.cond.L.Unlock()
 	}
