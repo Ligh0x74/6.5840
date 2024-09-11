@@ -41,7 +41,7 @@ func (rf *Raft) heartbeat() {
 			if rf.getLogLen()-1 < rf.nextIndex[i] {
 				args.Entries = []LogEntry{}
 			} else {
-				args.Entries = []LogEntry{rf.getLogEntry(rf.nextIndex[i])}
+				args.Entries = rf.getLogSuffixCopy(rf.nextIndex[i])
 			}
 			go rf.appendEntriesWrapper(i, args)
 		}
