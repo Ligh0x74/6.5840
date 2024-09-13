@@ -173,6 +173,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 			rf.log = []LogEntry{dummy}
 		}
 		rf.logOffset = args.LastIncludedIndex
+		rf.persist()
 
 		msg := ApplyMsg{
 			CommandValid:  false,
@@ -185,10 +186,13 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		msg.Snapshot = make([]byte, len(args.Data))
 		copy(msg.Snapshot, args.Data)
 		DPrintf(dSnap, "S%d Apply Snapshot, LastI%d", rf.me, args.LastIncludedIndex)
-		rf.applyIndex = rf.logOffset
+		rf.applyIndex = max(rf.applyIndex, rf.logOffset)
+		rf.snapshotToChan = true
 		rf.mu.Unlock()
 		rf.applyCh <- msg
 		rf.mu.Lock()
+		rf.snapshotToChan = false
+		rf.cond.Broadcast()
 	}
 
 	if rf.currentTerm < args.Term {

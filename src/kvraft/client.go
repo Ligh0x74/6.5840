@@ -45,11 +45,11 @@ func (ck *Clerk) Get(key string) string {
 		RequestId: nrand(),
 	}
 	for i := ck.leaderId; ; i = (i + 1) % len(ck.servers) {
-		DPrintf("C%v -> S%v Get RPC, GetArgs %v\n", ck.id, i, &args)
+		//DPrintf("C%v -> S%v Get RPC, GetArgs %v\n", ck.id, i, &args)
 		reply := GetReply{}
 		ok := ck.servers[i].Call("KVServer.Get", &args, &reply)
 		if ok {
-			DPrintf("C%v <- S%v Get RPC, GetReply %v\n", ck.id, i, &reply)
+			DPrintf("C%v <- S%v Get RPC, Args %v Reply %v\n", ck.id, i, &args, &reply)
 			if reply.Err == OK {
 				ck.leaderId = i
 				return reply.Value
@@ -75,12 +75,12 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		RequestId: nrand(),
 	}
 	for i := ck.leaderId; ; i = (i + 1) % len(ck.servers) {
-		DPrintf("C%v -> S%v PutAppend RPC, PutAppendArgs %v\n", ck.id, i, &args)
+		//DPrintf("C%v -> S%v PutAppend RPC, Args %v\n", ck.id, i, &args)
 		reply := PutAppendReply{}
 		ok := ck.servers[i].Call("KVServer."+op, &args, &reply)
 		if ok {
-			DPrintf("C%v <- S%v PutAppend RPC, PutAppendReply %v\n", ck.id, i, &reply)
 			if reply.Err == OK {
+				DPrintf("C%v <- S%v PutAppend RPC, Args %v Reply %v\n", ck.id, i, &args, &reply)
 				ck.leaderId = i
 				return
 			}

@@ -104,8 +104,9 @@ type Raft struct {
 	applyIndex            int
 	cond                  *sync.Cond
 
-	snapshot  []byte
-	logOffset int
+	snapshot       []byte
+	logOffset      int
+	snapshotToChan bool
 }
 
 // must hold lock before call
@@ -183,10 +184,14 @@ func (rf *Raft) readPersist(data []byte) {
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
+	if rf.logOffset >= index {
+		return
+	}
 	rf.log = rf.getLogSuffixCopy(index)
 	rf.logOffset = index
 	rf.snapshot = make([]byte, len(snapshot))
 	copy(rf.snapshot, snapshot)
+	rf.persist()
 	DPrintf(dSnap, "S%d Snapshot, Log Offset %d", rf.me, rf.logOffset)
 }
 
@@ -256,10 +261,10 @@ func Make(peers []*labrpc.ClientEnd, me int,
 func (rf *Raft) apply() {
 	for !rf.killed() {
 		rf.cond.L.Lock()
-		for rf.applyIndex == rf.commitIndex {
+		for rf.applyIndex == rf.commitIndex || rf.snapshotToChan {
 			rf.cond.Wait()
 		}
-		for rf.applyIndex+1 <= rf.commitIndex {
+		for rf.applyIndex+1 <= rf.commitIndex && !rf.snapshotToChan {
 			rf.applyIndex++
 			DPrintf(dCommit, "S%d Apply CommitIndex, C%d", rf.me, rf.applyIndex)
 			msg := ApplyMsg{

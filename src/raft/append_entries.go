@@ -211,10 +211,10 @@ func (rf *Raft) installSnapshotWrapper(i int, args InstallSnapshotArgs) {
 
 	ok = rf.currentTerm != args.Term
 	if ok {
-		DPrintf(dSnap, "S%d -> S%d InstallSnapshot, Assume False, T%d = T%d", rf.me, i, rf.currentTerm, args.Term)
+		DPrintf(dSnap, "S%d <- S%d InstallSnapshot, Assume False, T%d = T%d", rf.me, i, rf.currentTerm, args.Term)
 		return
 	}
-	DPrintf(dSnap, "S%d -> S%d InstallSnapshot, Reply, T%d <- T%d", rf.me, i, rf.currentTerm, reply.Term)
+	DPrintf(dSnap, "S%d <- S%d InstallSnapshot, Reply, T%d <- T%d", rf.me, i, rf.currentTerm, reply.Term)
 	rf.nextIndex[i] = max(rf.nextIndex[i], args.LastIncludedIndex+1)
 }
 

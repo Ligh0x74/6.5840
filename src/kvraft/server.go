@@ -1,7 +1,7 @@
 package kvraft
 
 import (
-
+	"bytes"
 	"time"
 
 	"6.5840/labgob"
@@ -54,25 +54,32 @@ type KVServer struct {
 	lastApplyIndex int
 	term           int
 	cond           *sync.Cond
+
+	persister *raft.Persister
 }
 
 func (kv *KVServer) apply() {
 	var msg raft.ApplyMsg
 	for !kv.killed() {
 		msg = <-kv.applyCh
-		if msg.CommandValid {
-			kv.applyToState(&msg)
+		kv.mu.Lock()
+		//DPrintf("S%v ApplyMsg CI %v LI %v\n", kv.me, msg.CommandIndex, kv.lastApplyIndex)
+		if msg.CommandValid && msg.CommandIndex > kv.lastApplyIndex {
+			kv.applyToStateL(&msg)
 		}
+		if msg.SnapshotValid {
+			kv.readSnapshotL(msg.Snapshot)
+		}
+		kv.mu.Unlock()
 	}
 }
 
-func (kv *KVServer) applyToState(msg *raft.ApplyMsg) {
-	kv.mu.Lock()
-	defer kv.mu.Unlock()
+func (kv *KVServer) applyToStateL(msg *raft.ApplyMsg) {
 	op := msg.Command.(Op)
 	if !kv.testAndSetL(op.ClerkId, op.RequestId) {
 		return
 	}
+	DPrintf("S%v ApplyMsg %v, KeyValue %v\n", kv.me, msg, kv.data[op.Key])
 	if op.Type == PUT {
 		kv.data[op.Key] = op.Value
 	} else if op.Type == APPEND {
@@ -105,6 +112,9 @@ func (kv *KVServer) ticker() {
 		if kv.term < term {
 			kv.term = term
 			kv.cond.Broadcast()
+		}
+		if kv.maxraftstate != -1 && kv.persister.RaftStateSize() >= kv.maxraftstate {
+			kv.writeSnapshotL()
 		}
 		kv.mu.Unlock()
 	}
@@ -215,9 +225,11 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.maxraftstate = maxraftstate
 
 	// You may need initialization code here.
+	kv.persister = persister
 	kv.data = make(map[string]string)
 	kv.requestBuffer = make(map[int64]int64)
 	kv.cond = sync.NewCond(&kv.mu)
+	kv.readSnapshotL(kv.persister.ReadSnapshot())
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
@@ -227,5 +239,42 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	go kv.ticker()
 
 	return kv
+}
+
+func (kv *KVServer) writeSnapshotL() {
+	DPrintf("S%v Write Snapshot, LastI%v\n", kv.me, kv.lastApplyIndex)
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(kv.data)
+	e.Encode(kv.requestBuffer)
+	e.Encode(kv.lastApplyIndex)
+	e.Encode(kv.term)
+	snapshot := w.Bytes()
+	kv.rf.Snapshot(kv.lastApplyIndex, snapshot)
+}
+
+func (kv *KVServer) readSnapshotL(snapshot []byte) {
+	if snapshot == nil || len(snapshot) < 1 { // bootstrap without any state?
+		return
+	}
+	r := bytes.NewBuffer(snapshot)
+	d := labgob.NewDecoder(r)
+	var data map[string]string
+	var requestBuffer map[int64]int64
+	var lastApplyIndex int
+	var term int
+	if d.Decode(&data) != nil ||
+		d.Decode(&requestBuffer) != nil ||
+		d.Decode(&lastApplyIndex) != nil ||
+		d.Decode(&term) != nil {
+		log.Fatalf("S%d readSnapshot error", kv.me)
+	}
+	if kv.lastApplyIndex < lastApplyIndex {
+		kv.data = data
+		kv.requestBuffer = requestBuffer
+		kv.lastApplyIndex = lastApplyIndex
+		kv.term = term
+	}
+	DPrintf("S%v Read Snapshot, LastI %v < %v\n", kv.me, kv.lastApplyIndex, lastApplyIndex)
 }
 
