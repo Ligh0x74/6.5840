@@ -1,5 +1,7 @@
 package shardctrler
 
+import "fmt"
+
 //
 // Shard controller: assigns shards to replication groups.
 //
@@ -35,7 +37,14 @@ const (
 type Err string
 
 type JoinArgs struct {
-	Servers map[int][]string // new GID -> servers mappings
+	Servers   map[int][]string // new GID -> servers mappings
+	ClerkId   int64
+	RequestId int64
+}
+
+func (args *JoinArgs) String() string {
+	return fmt.Sprintf("ClerkId %v RequestId %v Servers %v",
+		args.ClerkId, args.RequestId, args.Servers)
 }
 
 type JoinReply struct {
@@ -44,7 +53,14 @@ type JoinReply struct {
 }
 
 type LeaveArgs struct {
-	GIDs []int
+	GIDs      []int
+	ClerkId   int64
+	RequestId int64
+}
+
+func (args *LeaveArgs) String() string {
+	return fmt.Sprintf("ClerkId %v RequestId %v GIDs %v",
+		args.ClerkId, args.RequestId, args.GIDs)
 }
 
 type LeaveReply struct {
@@ -53,8 +69,15 @@ type LeaveReply struct {
 }
 
 type MoveArgs struct {
-	Shard int
-	GID   int
+	Shard     int
+	GID       int
+	ClerkId   int64
+	RequestId int64
+}
+
+func (args *MoveArgs) String() string {
+	return fmt.Sprintf("ClerkId %v RequestId %v Shard %v GID %v",
+		args.ClerkId, args.RequestId, args.Shard, args.GID)
 }
 
 type MoveReply struct {
@@ -63,7 +86,14 @@ type MoveReply struct {
 }
 
 type QueryArgs struct {
-	Num int // desired config number
+	Num       int // desired config number
+	ClerkId   int64
+	RequestId int64
+}
+
+func (args *QueryArgs) String() string {
+	return fmt.Sprintf("ClerkId %v RequestId %v Num %v",
+		args.ClerkId, args.RequestId, args.Num)
 }
 
 type QueryReply struct {
@@ -71,3 +101,4 @@ type QueryReply struct {
 	Err         Err
 	Config      Config
 }
+

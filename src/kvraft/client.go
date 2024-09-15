@@ -49,8 +49,8 @@ func (ck *Clerk) Get(key string) string {
 		reply := GetReply{}
 		ok := ck.servers[i].Call("KVServer.Get", &args, &reply)
 		if ok {
-			DPrintf("C%v <- S%v Get RPC, Args %v Reply %v\n", ck.id, i, &args, &reply)
 			if reply.Err == OK {
+				DPrintf("C%v <- S%v Get RPC, Args %v Reply %v\n", ck.id, i, &args, &reply)
 				ck.leaderId = i
 				return reply.Value
 			}
