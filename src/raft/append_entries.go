@@ -86,10 +86,9 @@ func (rf *Raft) appendEntriesWrapper(i int, args AppendEntriesArgs) {
 	if reply.Success {
 		DPrintf(dLeader, "S%d <- S%d AppendEntries, Reply True, T%d <- T%d, NextI%d", rf.me, i, rf.currentTerm, reply.Term, rf.nextIndex[i])
 		curNextIndex := args.PrevLogIndex + 1 + len(args.Entries)
-		if rf.nextIndex[i] >= curNextIndex {
-			return
+		if rf.nextIndex[i] < curNextIndex {
+			rf.nextIndex[i] = curNextIndex
 		}
-		rf.nextIndex[i] = curNextIndex
 		rf.matchIndex[i] = rf.nextIndex[i] - 1
 
 		// sort to find kth max, or use quick select

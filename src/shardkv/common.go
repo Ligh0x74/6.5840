@@ -67,3 +67,23 @@ func (args *GetReply) String() string {
 	return fmt.Sprintf("Err %v Value %v", args.Err, args.Value)
 }
 
+type PutShardArgs struct {
+	Data          map[int]map[string]string
+	RequestBuffer map[int]map[int64]int64
+	GID           int
+	Num           int
+}
+
+func (args *PutShardArgs) String() string {
+	return fmt.Sprintf("GID %v Num %v Data %v RequestBuffer %v",
+		args.GID, args.Num, args.Data, args.RequestBuffer)
+}
+
+type PutShardReply struct {
+	Err Err
+}
+
+func (args *PutShardReply) String() string {
+	return fmt.Sprintf("Err %v", args.Err)
+}
+

@@ -11,7 +11,7 @@ import "6.5840/labrpc"
 import "sync"
 import "6.5840/labgob"
 
-const Debug = true
+const Debug = false
 
 func DPrintf(format string, a ...interface{}) (n int, err error) {
 	if Debug {
@@ -298,7 +298,7 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 	ok := isLeader
 	ok = ok && sc.waitL(args.ClerkId, args.RequestId, index, term)
 	if ok {
-		if args.Num == -1 {
+		if args.Num == -1 || args.Num >= len(sc.configs) {
 			reply.Config = sc.configs[len(sc.configs)-1]
 		} else {
 			reply.Config = sc.configs[args.Num]
